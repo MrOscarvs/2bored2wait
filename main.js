@@ -26,6 +26,9 @@ var mc_username;
 var mc_password;
 var updatemessage;
 var discordBotToken;
+var discordServer;
+var discordChannel;
+var discordRole;
 var savelogin;
 var secrets;
 var accountType;
@@ -33,6 +36,10 @@ let launcherPath;
 let c = 150;
 let finishedQueue = !config.get("minecraftserver.is2b2t");
 let dc;
+let channel;
+let guild;
+let ownerRole;
+
 const rl = require("readline").createInterface({
 	input: process.stdin,
 	output: process.stdout
@@ -80,6 +87,27 @@ const askForSecrets = async () => {
 	}
 	localConf.discordBot = discordBotToken === "" ? false : config.has("discordBot") && config.get("discordBot");
 
+	if(discordBotToken !== "" && !config.has("DiscordServer")) {
+		canSave = true;
+		discordServer = await promisedQuestion("Bot Server ID []: ");
+		localConf.BotServer = discordServer;
+	}
+	localConf.discordBot = discordServer === "" ? false : config.has("discordBot") && config.get("discordBot");
+
+	if(discordBotToken !== "" && !config.has("DiscordChannel")) {
+		canSave = true;
+		discordChannel = await promisedQuestion("Bot Server Channel ID []: ");
+		localConf.BotChannel = discordChannel;
+	}
+	localConf.discordBot = discordChannel === "" ? false : config.has("discordBot") && config.get("discordBot");
+
+	if(discordBotToken !== "" && !config.has("DiscordRole")) {
+		canSave = true;
+		discordRole = await promisedQuestion("Bot Server Role ID []: ");
+		localConf.BotRole = discordRole;
+	}
+	localConf.discordBot = discordRole === "" ? false : config.has("discordBot") && config.get("discordBot");
+
 	if(canSave) {
 		
 		savelogin = await promisedQuestion("Save login for later use? Y or N [N]: ");
@@ -92,6 +120,9 @@ const askForSecrets = async () => {
 	}
 	if (localConf.discordBot) {
 		dc = new discord.Client();
+		channel = dc.channels.cache.get(discordChannel??config.get('DiscordChannel'));
+		guild = dc.guilds.cache.get(discordServer??config.get('DiscordServer'));
+		//ownerRole = guild.roles.cache.get(discordRole??config.get('DiscordRole'));
 		dc.login(discordBotToken??config.get('BotToken')).catch(()=>{
 			console.warn("There was an error when trying to log in using the provided Discord bot token. If you didn't enter a token this message will go away the next time you run this program!"); //handle wrong tokens gracefully
 		});
@@ -130,8 +161,12 @@ else {
 	launcherPath = config.profilesFolder;
 	accountType = config.get("accountType");
 	discordBotToken = config.BotToken
+	discordChannel = config.BotChannel
+	discordServer = config.BotServer
+	discordRole = config.BotRole
 	askForSecrets();
 }
+
 
 var stoppedByPlayer = false;
 var timedStart;
@@ -382,6 +417,11 @@ function activity(string) {
 //the discordBot part starts here.
 
 function userInput(cmd, DiscordOrigin, discordMsg) {
+	if (DiscordOrigin) {
+		if (discordMsg.channel != (config.get('DiscordChannel')) || discordMsg.guild.id != (config.get('DiscordServer')) ) {
+			return;
+		}
+	}
 	 cmd = cmd.toLowerCase();
 	
 	switch (cmd) {
@@ -393,36 +433,38 @@ function userInput(cmd, DiscordOrigin, discordMsg) {
 		case "exit":
 		case "quit":
 			return process.exit(0);
-			
+
 		case "update":
 			switch (doing) {
 				case "queue":
-					if (DiscordOrigin) discordMsg.channel.send({
-						embed: {
-							color: 3447003,
-							author: {
-								name: dc.user.username,
-								icon_url: dc.user.avatarURL
-							},
-							title: "2bored2wait discord bridge",
-							description: "Start and stop the queue from discord!",
-							fields: [{
-								name: "Position",
-								value: `You are in position **${webserver.queuePlace}**.`
-							},
-								{
-									name: "ETA",
-									value: `Estimated time until login: **${webserver.ETA}**`
+					if (DiscordOrigin) {
+						discordMsg.server
+						discordMsg.channel.send({
+							embed: {
+								color: 3447003,
+								author: {
+									name: dc.user.username,
+									icon_url: dc.user.avatarURL
+								},
+								title: "2bored2wait discord bridge",
+								description: "Start and stop the queue from discord!",
+								fields: [{
+									name: "Position",
+									value: `You are in position **${webserver.queuePlace}**.`
+								},
+									{
+										name: "ETA",
+										value: `Estimated time until login: **${webserver.ETA}**`
+									}
+								],
+								timestamp: new Date(),
+								footer: {
+									icon_url: dc.user.avatarURL,
+									text: "Author: Surprisejedi"
 								}
-							],
-							timestamp: new Date(),
-							footer: {
-								icon_url: dc.user.avatarURL,
-								text: "Author: Surprisejedi"
 							}
-						}
-					});
-					else console.log("Position: " + webserver.queuePlace + "  Estimated time until login: " + webserver.ETA);
+						});
+					} else console.log("Position: " + webserver.queuePlace + "  Estimated time until login: " + webserver.ETA);
 					break;
 				case "timedStart":
 					msg(DiscordOrigin, discordMsg, "Timer", "Timer is set to " + starttimestring);
